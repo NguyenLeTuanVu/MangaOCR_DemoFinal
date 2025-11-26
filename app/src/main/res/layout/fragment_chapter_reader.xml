@@ -113,16 +113,16 @@
             app:fabSize="mini"
             android:contentDescription="Toggle text overlay" />
 
-        <!-- Delete Chapter -->
+        <!-- ✅ NEW: Delete Page Button -->
         <com.google.android.material.floatingactionbutton.FloatingActionButton
-            android:id="@+id/fabDeleteChapter"
+            android:id="@+id/fabDeletePage"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:layout_marginBottom="12dp"
+            android:backgroundTint="#F44336"
             android:src="@android:drawable/ic_menu_delete"
-            app:tint="@android:color/holo_red_light"
-            app:fabSize="mini"
-            android:contentDescription="Delete chapter" />
+            android:contentDescription="Xóa trang"
+            app:fabSize="mini" />
 
     </LinearLayout>
 

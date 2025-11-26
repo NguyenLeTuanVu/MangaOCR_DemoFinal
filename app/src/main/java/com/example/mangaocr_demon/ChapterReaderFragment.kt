@@ -277,11 +277,17 @@ class ChapterReaderFragment : Fragment() {
             true
         }
 
-        // ✅ THÊM: Nút xóa page
-        //binding.fabDeletePage?.setOnClickListener {
-        // deleteCurrentPage()
-        //  toggleFabMenu()
-        //}
+        binding.fabToggleOverlay.setOnLongClickListener {
+            deleteCurrentPage()
+            toggleFabMenu()
+            true
+        }
+        // ✅ NEW: Nút xóa page (nếu có trong layout)
+        binding.fabDeletePage.setOnClickListener {
+            deleteCurrentPage()
+            toggleFabMenu()
+        }
+
     }
     // ✅ THÊM: Function xóa page hiện tại
     private fun deleteCurrentPage() {
