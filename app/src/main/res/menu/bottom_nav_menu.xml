@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="utf-8"?>
+<menu xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto">
+
+    <!-- Home -->
+    <item
+        android:id="@+id/nav_home"
+        android:title="Home"
+        app:showAsAction="ifRoom"
+        android:icon="@drawable/ic_home" />
+
+    <item
+        android:id="@+id/nav_bookcase"
+        android:icon="@drawable/ic_bookcase"
+        android:title="Bookcase" />
+
+    <!-- History -->
+    <item
+        android:id="@+id/nav_history"
+        android:title="History"
+        app:showAsAction="ifRoom"
+        android:icon="@drawable/ic_history" />
+
+    <!-- Settings -->
+    <item
+        android:id="@+id/nav_settings"
+        android:title="Settings"
+        app:showAsAction="ifRoom"
+        android:icon="@drawable/ic_settings" />
+</menu>

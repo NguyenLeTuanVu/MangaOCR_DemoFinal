@@ -1,0 +1,47 @@
+{
+  "project_info": {
+    "project_number": "638740101690",
+    "project_id": "manga-ocr-2e640",
+    "storage_bucket": "manga-ocr-2e640.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:638740101690:android:3e66d84b951cc509641303",
+        "android_client_info": {
+          "package_name": "com.example.mangaocr_demon"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "638740101690-62p30ldnesln3k23uj4a0thp59j8e637.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.example.mangaocr_demon",
+            "certificate_hash": "876978cfd2417774b235806c2167394856b0ca45"
+          }
+        },
+        {
+          "client_id": "638740101690-vrvge6rjhr5tphfpgn4300ejs6s93vki.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCXwKYYPyexZmcuX4cWu3qXjnUclHSyn08"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "638740101690-vrvge6rjhr5tphfpgn4300ejs6s93vki.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

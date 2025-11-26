@@ -1,0 +1,17 @@
+<resources>
+    <string name="app_name">MangaOCR_Demon</string>
+    <!-- TODO: Remove or change this placeholder text -->
+    <string name="hello_blank_fragment">Hello blank fragment</string>
+    <string name="default_web_client_id">PASTE_WEB_CLIENT_ID_Ở_ĐÂY</string>
+    <string name="ocr_menu">OCR Menu</string>
+    <string name="scan_current_page">Scan current page</string>
+    <string name="toggle_overlay">Toggle overlay</string>
+    <string name="debug_mode">Debug mode</string>
+    <string name="translation_done">Translation done</string>
+    <string name="manga_page">Manga page</string>
+    <string name="back">Back</string>
+    <string name="manga_page_image">Manga page image</string>
+    <string name="error_icon">Error icon</string>
+    <string name="ocr_processed">OCR processed</string>
+    <string name="translation_available">Translation available</string>
+</resources>

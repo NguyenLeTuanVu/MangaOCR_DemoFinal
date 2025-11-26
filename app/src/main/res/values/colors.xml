@@ -1,0 +1,85 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- PRIMARY COLORS -->
+    <color name="primary">#6200EE</color>
+    <color name="primary_variant">#3700B3</color>
+    <color name="primary_light">#BB86FC</color>
+    <color name="on_primary">#FFFFFF</color>
+
+    <!-- Legacy support -->
+    <color name="purple_200">#FFBB86FC</color>
+    <color name="purple_500">#FF6200EE</color>
+    <color name="purple_700">#FF3700B3</color>
+
+    <!-- SECONDARY COLORS -->
+    <color name="secondary">#03DAC6</color>
+    <color name="secondary_variant">#018786</color>
+    <color name="on_secondary">#000000</color>
+
+    <color name="teal_200">#FF03DAC5</color>
+    <color name="teal_700">#FF018786</color>
+
+    <!-- BACKGROUND & SURFACE -->
+    <color name="background_light">#FFFFFF</color>
+    <color name="surface_light">#FFFFFF</color>
+    <color name="surface_variant_light">#F5F5F5</color>
+
+    <color name="background_dark">#121212</color>
+    <color name="surface_dark">#1E1E1E</color>
+    <color name="surface_variant_dark">#2C2C2C</color>
+
+    <color name="background_sepia">#F5E5C0</color>
+    <color name="surface_sepia">#F5E5C0</color>
+
+    <!-- TEXT COLORS -->
+    <color name="text_primary_light">#212121</color>
+    <color name="text_secondary_light">#757575</color>
+    <color name="text_tertiary_light">#9E9E9E</color>
+    <color name="text_disabled_light">#BDBDBD</color>
+
+    <color name="text_primary_dark">#FFFFFF</color>
+    <color name="text_secondary_dark">#B0B0B0</color>
+
+    <color name="text_dark">#000000</color>
+    <color name="text_light">#FFFFFF</color>
+
+    <!-- SEMANTIC COLORS -->
+    <color name="success">#4CAF50</color>
+    <color name="error">#F44336</color>
+    <color name="warning">#FF9800</color>
+    <color name="info">#2196F3</color>
+
+    <!-- STATISTICS CARD COLORS -->
+    <color name="stat_blue_bg">#E3F2FD</color>
+    <color name="stat_blue_text">#1976D2</color>
+    <color name="stat_purple_bg">#F3E5F5</color>
+    <color name="stat_purple_text">#7B1FA2</color>
+    <color name="stat_green_bg">#E8F5E9</color>
+    <color name="stat_green_text">#388E3C</color>
+    <color name="stat_orange_bg">#FFF3E0</color>
+    <color name="stat_orange_text">#F57C00</color>
+
+    <!-- BASIC COLORS -->
+    <color name="black">#FF000000</color>
+    <color name="white">#FFFFFFFF</color>
+    <color name="transparent">#00000000</color>
+
+    <color name="gray_100">#F5F5F5</color>
+    <color name="gray_200">#EEEEEE</color>
+    <color name="gray_300">#E0E0E0</color>
+    <color name="gray_500">#9E9E9E</color>
+    <color name="gray_700">#616161</color>
+
+    <!-- OVERLAY & SCRIM -->
+    <color name="scrim_light">#33000000</color>
+    <color name="scrim_medium">#66000000</color>
+    <color name="scrim_dark">#99000000</color>
+
+    <!-- READER SPECIFIC -->
+    <color name="reader_background_black">#000000</color>
+    <color name="reader_controls_bg">#80000000</color>
+
+    <!-- DIVIDERS -->
+    <color name="divider_light">#E0E0E0</color>
+    <color name="divider_dark">#2C2C2C</color>
+</resources>
