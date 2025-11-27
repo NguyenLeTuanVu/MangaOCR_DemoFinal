@@ -182,7 +182,7 @@ class SelectChaptersDialogFragment : DialogFragment() {
                     addedCount > 0 ->
                         "Đã thêm $addedCount chapter vào album"
                     else ->
-                        "Tất cả chapter đã tồn tại trong album"
+                        "Chapter đã tồn tại trong album"
                 }
 
                 Toast.makeText(requireContext(), message, Toast.LENGTH_SHORT).show()

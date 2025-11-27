@@ -18,8 +18,10 @@ import com.example.mangaocr_demon.ui.manga.MangaAdapter
 import com.example.mangaocr_demon.ui.viewmodel.HomeViewModel
 import com.example.mangaocr_demon.ui.dialog.AddMangaDialogFragment
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.flow.first // ✅ Thêm import này
 
 class HomeFragment : Fragment() {
     private var _binding: FragmentHomeBinding? = null
@@ -29,11 +31,15 @@ class HomeFragment : Fragment() {
 
     private var isFabMenuOpen = false
 
-    // ✅ Lưu tạm URIs và type để dùng sau khi dialog confirm
     private var pendingImageUris: List<String>? = null
     private var pendingPdfUri: String? = null
+    private var addingToManga: MangaEntity? = null
 
-    // Launcher cho PDF
+    // ✅ Track coroutine jobs để cancel khi destroy
+    private var openReaderJob: Job? = null
+    private var addImagesJob: Job? = null
+    private var addPdfJob: Job? = null
+
     private val pdfPickerLauncher = registerForActivityResult(
         ActivityResultContracts.StartActivityForResult()
     ) { result ->
@@ -45,19 +51,22 @@ class HomeFragment : Fragment() {
                         Intent.FLAG_GRANT_READ_URI_PERMISSION
                     )
 
-                    // ✅ Lưu URI và hiển thị dialog
                     pendingPdfUri = pdfUri.toString()
-                    showAddMangaDialog("PDF")
+
+                    if (addingToManga != null) {
+                        addPdfToExistingManga(addingToManga!!, pdfUri.toString())
+                    } else {
+                        showAddMangaDialog("PDF")
+                    }
 
                 } catch (e: Exception) {
                     e.printStackTrace()
-                    Toast.makeText(context, "Lỗi: ${e.message}", Toast.LENGTH_SHORT).show()
+                    showToast("Lỗi: ${e.message}")
                 }
             }
         }
     }
 
-    // Launcher cho Images
     private val imagePickerLauncher = registerForActivityResult(
         ActivityResultContracts.StartActivityForResult()
     ) { result ->
@@ -87,24 +96,22 @@ class HomeFragment : Fragment() {
                     }
 
                     when {
-                        uris.isEmpty() -> {
-                            Toast.makeText(context, "Bạn chưa chọn ảnh nào", Toast.LENGTH_SHORT).show()
-                        }
-                        uris.size < MIN_IMAGES -> {
-                            Toast.makeText(context, "Vui lòng chọn ít nhất $MIN_IMAGES ảnh", Toast.LENGTH_LONG).show()
-                        }
-                        uris.size > MAX_IMAGES -> {
-                            Toast.makeText(context, "Chỉ được chọn tối đa $MAX_IMAGES ảnh. Bạn đã chọn ${uris.size} ảnh.", Toast.LENGTH_LONG).show()
-                        }
+                        uris.isEmpty() -> showToast("Bạn chưa chọn ảnh nào")
+                        uris.size < MIN_IMAGES -> showToast("Vui lòng chọn ít nhất $MIN_IMAGES ảnh")
+                        uris.size > MAX_IMAGES -> showToast("Chỉ được chọn tối đa $MAX_IMAGES ảnh")
                         else -> {
-                            // ✅ Lưu URIs và hiển thị dialog
                             pendingImageUris = uris
-                            showAddMangaDialog("IMAGE")
+
+                            if (addingToManga != null) {
+                                addImagesToExistingManga(addingToManga!!, uris)
+                            } else {
+                                showAddMangaDialog("IMAGE")
+                            }
                         }
                     }
                 } catch (e: Exception) {
                     e.printStackTrace()
-                    Toast.makeText(context, "Lỗi: ${e.message}", Toast.LENGTH_SHORT).show()
+                    showToast("Lỗi: ${e.message}")
                 }
             }
         }
@@ -119,22 +126,15 @@ class HomeFragment : Fragment() {
 
         adapter = MangaAdapter(
             onClick = { manga ->
-                android.util.Log.d("HomeFragment", "Opening manga: ${manga.title}")
-                val bundle = Bundle().apply {
-                    putLong("mangaId", manga.id)
-                    putString("mangaTitle", manga.title)
-                }
-                val fragment = MangaDetailFragment().apply {
-                    arguments = bundle
-                }
-                parentFragmentManager.beginTransaction()
-                    .replace(R.id.fragment_container, fragment)
-                    .addToBackStack(null)
-                    .commit()
+                // ✅ Click vào manga → Hiện danh sách chapters
+                showChapterList(manga)
             },
             onDeleteClick = { manga ->
-                android.util.Log.d("HomeFragment", "Delete clicked for: ${manga.title}")
                 showDeleteMangaDialog(manga)
+            },
+            onLongClick = { manga ->
+                // ✅ Long press → Show menu options
+                showMangaOptionsMenu(manga)
             }
         )
 
@@ -147,12 +147,183 @@ class HomeFragment : Fragment() {
             binding.tvMangaCount.text = "${list.size} truyện"
         }
 
+        // ✅ KHÔNG observe manga created nữa - không auto navigate
+        // User sẽ tự click vào manga để xem chapters
+
+        /*
+        viewModel.mangaCreated.observe(viewLifecycleOwner) { mangaId ->
+            if (mangaId > 0 && addingToManga == null) {
+                openMangaReader(mangaId)
+            }
+        }
+        */
+
         setupFabMenu()
 
         return binding.root
     }
 
-    // ✅ NEW: Hiển thị dialog nhập tên manga
+    private fun openMangaReader(mangaId: Long) {
+        // ✅ Cancel job cũ nếu có
+        openReaderJob?.cancel()
+
+        openReaderJob = viewLifecycleOwner.lifecycleScope.launch {
+            try {
+                // ✅ Check fragment vẫn attached
+                if (!isAdded) return@launch
+
+                val db = AppDatabase.getDatabase(requireContext())
+
+                // ✅ FIX: Dùng first() để lấy 1 lần duy nhất
+                val chapterList = db.chapterDao().getChaptersForManga(mangaId).first()
+
+                if (chapterList.isNotEmpty() && isAdded) {
+                    val chapterId = chapterList.first().id
+                    navigateToReader(chapterId)
+                } else {
+                    showToast("Manga này chưa có ảnh nào")
+                }
+
+            } catch (e: Exception) {
+                if (e !is kotlinx.coroutines.CancellationException) {
+                    android.util.Log.e("HomeFragment", "Error opening manga", e)
+                    showToast("Không thể mở: ${e.message}")
+                }
+            }
+        }
+    }
+
+    private fun navigateToReader(chapterId: Long) {
+        if (!isAdded || parentFragmentManager.isStateSaved) return
+
+        try {
+            val readerFragment = ChapterReaderFragment.newInstance(chapterId)
+            parentFragmentManager.beginTransaction()
+                .replace(R.id.fragment_container, readerFragment)
+                .addToBackStack("reader")
+                .commit()
+        } catch (e: Exception) {
+            android.util.Log.e("HomeFragment", "Navigation error", e)
+        }
+    }
+
+    private fun addImagesToExistingManga(manga: MangaEntity, imageUris: List<String>) {
+        // ✅ Cancel job cũ
+        addImagesJob?.cancel()
+
+        addImagesJob = viewLifecycleOwner.lifecycleScope.launch {
+            try {
+                if (!isAdded) return@launch
+
+                val db = AppDatabase.getDatabase(requireContext())
+
+                // ✅ FIX: Dùng first() thay vì collect để lấy 1 lần rồi xong
+                val existingChapters = db.chapterDao().getChaptersForManga(manga.id).first()
+
+                val nextChapterNumber = existingChapters.size + 1
+
+                // ✅ Tạo chapter trong IO thread
+                withContext(Dispatchers.IO) {
+                    // Tạo chapter mới
+                    val chapter = com.example.mangaocr_demon.data.ChapterEntity(
+                        mangaId = manga.id,
+                        number = nextChapterNumber,
+                        title = "Chapter $nextChapterNumber"
+                    )
+                    val chapterId = db.chapterDao().insert(chapter)
+
+                    // Thêm pages
+                    imageUris.forEachIndexed { index, uri ->
+                        val page = com.example.mangaocr_demon.data.PageEntity(
+                            chapterId = chapterId,
+                            pageIndex = index,
+                            imageUri = uri,
+                            pageType = "IMAGE"
+                        )
+                        db.pageDao().insert(page)
+                    }
+                }
+
+                showToast("✅ Đã thêm Chapter $nextChapterNumber với ${imageUris.size} ảnh vào \"${manga.title}\"")
+
+                // Reset state
+                addingToManga = null
+                pendingImageUris = null
+
+            } catch (e: Exception) {
+                if (e !is kotlinx.coroutines.CancellationException) {
+                    android.util.Log.e("HomeFragment", "Error adding images", e)
+                    showToast("Lỗi: ${e.message}")
+                }
+            }
+        }
+    }
+
+    private fun addPdfToExistingManga(manga: MangaEntity, pdfUri: String) {
+        // ✅ Cancel job cũ
+        addPdfJob?.cancel()
+
+        addPdfJob = viewLifecycleOwner.lifecycleScope.launch {
+            try {
+                if (!isAdded) return@launch
+
+                val db = AppDatabase.getDatabase(requireContext())
+
+                // ✅ FIX: Dùng first() thay vì collect
+                val existingChapters = db.chapterDao().getChaptersForManga(manga.id).first()
+
+                val nextChapterNumber = existingChapters.size + 1
+
+                withContext(Dispatchers.IO) {
+                    // Get PDF page count
+                    var totalPages = 0
+                    try {
+                        requireContext().contentResolver.openFileDescriptor(
+                            android.net.Uri.parse(pdfUri), "r"
+                        )?.use { pfd ->
+                            android.graphics.pdf.PdfRenderer(pfd).use { renderer ->
+                                totalPages = renderer.pageCount
+                            }
+                        }
+                    } catch (e: Exception) {
+                        totalPages = 1
+                    }
+
+                    // Tạo chapter
+                    val chapter = com.example.mangaocr_demon.data.ChapterEntity(
+                        mangaId = manga.id,
+                        number = nextChapterNumber,
+                        title = "Chapter $nextChapterNumber"
+                    )
+                    val chapterId = db.chapterDao().insert(chapter)
+
+                    // Thêm PDF pages
+                    for (pdfPageIndex in 0 until totalPages) {
+                        val pageEntity = com.example.mangaocr_demon.data.PageEntity(
+                            chapterId = chapterId,
+                            pageIndex = pdfPageIndex,
+                            pdfUri = pdfUri,
+                            pdfPageNumber = pdfPageIndex,
+                            pageType = "PDF"
+                        )
+                        db.pageDao().insert(pageEntity)
+                    }
+                }
+
+                showToast("✅ Đã thêm Chapter $nextChapterNumber từ PDF vào \"${manga.title}\"")
+
+                addingToManga = null
+                pendingPdfUri = null
+
+            } catch (e: Exception) {
+                if (e !is kotlinx.coroutines.CancellationException) {
+                    android.util.Log.e("HomeFragment", "Error adding PDF", e)
+                    showToast("Lỗi: ${e.message}")
+                }
+            }
+        }
+    }
+
     private fun showAddMangaDialog(sourceType: String) {
         if (!isAdded || childFragmentManager.isStateSaved) return
 
@@ -163,26 +334,25 @@ class HomeFragment : Fragment() {
                     pendingPdfUri?.let { uri ->
                         val manga = MangaEntity(
                             title = title,
-                            description = description.ifEmpty { "Nhập từ file PDF" },
-                            coverImageUri = null // ✅ PDF không có cover mặc định
+                            description = description.ifEmpty { "Nhập từ PDF" },
+                            coverImageUri = null
                         )
                         viewModel.addMangaFromPdf(manga, uri)
-                        Toast.makeText(context, "Đã thêm PDF: $title", Toast.LENGTH_SHORT).show()
+                        showToast("✅ Đã thêm manga \"$title\" từ PDF")
                         pendingPdfUri = null
                     }
                 }
                 "IMAGE" -> {
                     pendingImageUris?.let { uris ->
-                        // ✅ Dùng ảnh đầu tiên làm cover
                         val coverUri = if (uris.isNotEmpty()) uris[0] else null
 
                         val manga = MangaEntity(
                             title = title,
-                            description = description.ifEmpty { "Nhập từ ${uris.size} ảnh" },
-                            coverImageUri = coverUri // ✅ Set cover image
+                            description = description.ifEmpty { "${uris.size} ảnh" },
+                            coverImageUri = coverUri
                         )
                         viewModel.addMangaWithImages(manga, uris)
-                        Toast.makeText(context, "Đã thêm ${uris.size} ảnh: $title", Toast.LENGTH_SHORT).show()
+                        showToast("✅ Đã thêm manga \"$title\" với ${uris.size} ảnh")
                         pendingImageUris = null
                     }
                 }
@@ -194,55 +364,32 @@ class HomeFragment : Fragment() {
     private fun showDeleteMangaDialog(manga: MangaEntity) {
         if (!isAdded || context == null) return
 
-        android.util.Log.d("HomeFragment", "Showing delete dialog for: ${manga.title}")
-
         androidx.appcompat.app.AlertDialog.Builder(requireContext())
             .setTitle("Xóa \"${manga.title}\"?")
-            .setMessage("Xóa manga này sẽ xóa toàn bộ chapters và ảnh bên trong. Hành động không thể hoàn tác.")
+            .setMessage("Xóa manga này sẽ xóa toàn bộ ảnh bên trong. Hành động không thể hoàn tác.")
             .setPositiveButton("Xóa") { _, _ ->
-                android.util.Log.d("HomeFragment", "User confirmed delete")
                 deleteManga(manga)
             }
-            .setNegativeButton("Hủy") { dialog, _ ->
-                android.util.Log.d("HomeFragment", "User cancelled delete")
-                dialog.dismiss()
-            }
+            .setNegativeButton("Hủy", null)
             .show()
     }
 
     private fun deleteManga(manga: MangaEntity) {
         if (!isAdded || context == null) return
 
-        android.util.Log.d("HomeFragment", "Starting delete for: ${manga.title}")
-
         viewLifecycleOwner.lifecycleScope.launch {
             try {
                 val db = AppDatabase.getDatabase(requireContext())
 
                 withContext(Dispatchers.IO) {
-                    android.util.Log.d("HomeFragment", "Deleting manga from database: ${manga.id}")
                     db.mangaDao().delete(manga)
                 }
 
-                android.util.Log.d("HomeFragment", "✅ Delete successful")
-
-                if (isAdded && context != null) {
-                    Toast.makeText(
-                        requireContext(),
-                        "Đã xóa \"${manga.title}\"",
-                        Toast.LENGTH_SHORT
-                    ).show()
-                }
+                showToast("Đã xóa \"${manga.title}\"")
 
             } catch (e: Exception) {
-                android.util.Log.e("HomeFragment", "❌ Error deleting manga", e)
-                if (isAdded && context != null) {
-                    Toast.makeText(
-                        requireContext(),
-                        "Lỗi khi xóa: ${e.message}",
-                        Toast.LENGTH_LONG
-                    ).show()
-                }
+                android.util.Log.e("HomeFragment", "Error deleting", e)
+                showToast("Lỗi: ${e.message}")
             }
         }
     }
@@ -262,21 +409,19 @@ class HomeFragment : Fragment() {
 
         binding.btnAddPdf.setOnClickListener {
             closeFabMenu()
+            addingToManga = null
             openPdfPicker()
         }
 
         binding.btnAddImages.setOnClickListener {
             closeFabMenu()
+            addingToManga = null
             showImagePickerInfo()
         }
     }
 
     private fun showImagePickerInfo() {
-        Toast.makeText(
-            context,
-            "Vui lòng chọn từ $MIN_IMAGES đến $MAX_IMAGES ảnh",
-            Toast.LENGTH_SHORT
-        ).show()
+        showToast("Vui lòng chọn từ $MIN_IMAGES đến $MAX_IMAGES ảnh")
         openImagePicker()
     }
 
@@ -323,6 +468,41 @@ class HomeFragment : Fragment() {
         imagePickerLauncher.launch(intent)
     }
 
+    private fun showMangaOptionsMenu(manga: MangaEntity) {
+        if (!isAdded || context == null) return
+
+        androidx.appcompat.app.AlertDialog.Builder(requireContext())
+            .setTitle(manga.title)
+            .setItems(arrayOf(
+                "Mở xem ngay (Chapter đầu tiên)",
+                "Thêm ảnh vào manga này",
+                "Thêm PDF vào manga này"
+            )) { _, which ->
+                when (which) {
+                    0 -> openMangaReader(manga.id) // ✅ Mở reader trực tiếp
+                    1 -> {
+                        addingToManga = manga
+                        showImagePickerInfo()
+                    }
+                    2 -> {
+                        addingToManga = manga
+                        openPdfPicker()
+                    }
+                }
+            }
+            .show()
+    }
+
+    private fun showChapterList(manga: MangaEntity) {
+        if (!isAdded || parentFragmentManager.isStateSaved) return
+
+        val fragment = MangaChapterListFragment.newInstance(manga.id, manga.title)
+        parentFragmentManager.beginTransaction()
+            .replace(R.id.fragment_container, fragment)
+            .addToBackStack("chapter_list")
+            .commit()
+    }
+
     private fun updateEmptyState(isEmpty: Boolean) {
         if (isEmpty) {
             binding.emptyState.visibility = View.VISIBLE
@@ -333,8 +513,21 @@ class HomeFragment : Fragment() {
         }
     }
 
+    // ✅ Helper function để show toast an toàn
+    private fun showToast(message: String) {
+        if (isAdded && context != null) {
+            Toast.makeText(requireContext(), message, Toast.LENGTH_SHORT).show()
+        }
+    }
+
     override fun onDestroyView() {
         super.onDestroyView()
+
+        // ✅ Cancel tất cả coroutines
+        openReaderJob?.cancel()
+        addImagesJob?.cancel()
+        addPdfJob?.cancel()
+
         _binding = null
     }
 

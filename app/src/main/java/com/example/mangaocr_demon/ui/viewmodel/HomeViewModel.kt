@@ -13,13 +13,11 @@ import com.google.mlkit.vision.text.TextRecognition
 import com.google.mlkit.vision.text.japanese.JapaneseTextRecognizerOptions
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
-import java.text.SimpleDateFormat
 import kotlinx.coroutines.withContext
 import java.util.*
 
 class HomeViewModel(application: Application) : AndroidViewModel(application) {
 
-    // ------------------- OCR + Translate (giá»¯ nguyÃªn) ------------------- //
     private val _ocrText = MutableLiveData<String>()
     val ocrText: LiveData<String> get() = _ocrText
 
@@ -31,6 +29,13 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
 
     private val db = AppDatabase.getDatabase(application)
     private val historyDao = db.historyDao()
+
+    // ✅ Return manga ID để navigate
+    private val _mangaCreated = MutableLiveData<Long>()
+    val mangaCreated: LiveData<Long> = _mangaCreated
+
+    // ✅ Return manga ID để navigate
+
 
     fun setImageUri(uri: Uri) {
         _imageUri.postValue(uri)
@@ -51,7 +56,7 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
                 }
             }
             .addOnFailureListener { e ->
-                _ocrText.postValue("OCR lá»—i: ${e.message}")
+                _ocrText.postValue("OCR lỗi: ${e.message}")
             }
     }
 
@@ -69,7 +74,7 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
                 translateText(text, sourceLang, TranslateLanguage.VIETNAMESE, imageUri)
             }
             .addOnFailureListener {
-                _translatedText.postValue("KhÃ´ng xÃ¡c Ä‘á»‹nh Ä‘Æ°á»£c ngÃ´n ngá»¯.")
+                _translatedText.postValue("Không xác định được ngôn ngữ.")
             }
     }
 
@@ -97,15 +102,15 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
                         }
                     }
                     .addOnFailureListener { e ->
-                        _translatedText.postValue("Dá»‹ch lá»—i: ${e.message}")
+                        _translatedText.postValue("Dịch lỗi: ${e.message}")
                     }
             }
             .addOnFailureListener { e ->
-                _translatedText.postValue("KhÃ´ng táº£i Ä‘Æ°á»£c model dá»‹ch: ${e.message}")
+                _translatedText.postValue("Không tải được model dịch: ${e.message}")
             }
     }
 
-    // ------------------- Manga / Chapter / Page ------------------- //
+    // ------------------- Manga WITHOUT Chapters ------------------- //
     private val mangaDao = db.mangaDao()
     private val chapterDao = db.chapterDao()
     private val pageDao = db.pageDao()
@@ -113,26 +118,21 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
     val mangaList: LiveData<List<MangaEntity>> = mangaDao.getAllManga().asLiveData()
 
     /**
-     * âœ… FIX: ThÃªm táº¥t cáº£ áº£nh vÃ o 1 CHAPTER DUY NHáº¤T
-     * KhÃ´ng tá»± Ä‘á»™ng chia chapters ná»¯a
+     * ✅ NEW: Thêm chapter mới với ảnh vào manga có sẵn
      */
-    fun addMangaWithImages(manga: MangaEntity, imageUris: List<String>) {
+    fun addChapterWithImages(mangaId: Long, chapterNumber: Int, imageUris: List<String>) {
         viewModelScope.launch(Dispatchers.IO) {
             try {
-                // 1. Táº¡o manga
-                val mangaId = mangaDao.insert(manga)
-                android.util.Log.d("HomeViewModel", "âœ… Created manga: $mangaId")
-
-                // 2. Táº¡o 1 CHAPTER DUY NHáº¤T
+                // Tạo chapter mới
                 val chapter = ChapterEntity(
                     mangaId = mangaId,
-                    number = 1,
-                    title = "Chapter 1"
+                    number = chapterNumber,
+                    title = "Chapter $chapterNumber"
                 )
                 val chapterId = chapterDao.insert(chapter)
-                android.util.Log.d("HomeViewModel", "âœ… Created single chapter: $chapterId")
+                android.util.Log.d("HomeViewModel", "Created chapter: $chapterId")
 
-                // 3. ThÃªm Táº¤T Cáº¢ áº£nh vÃ o chapter nÃ y
+                // Thêm pages
                 imageUris.forEachIndexed { index, uri ->
                     val page = PageEntity(
                         chapterId = chapterId,
@@ -143,10 +143,92 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
                     pageDao.insert(page)
                 }
 
-                android.util.Log.d("HomeViewModel", "âœ… Added ${imageUris.size} images to chapter 1")
+                android.util.Log.d("HomeViewModel", "Added ${imageUris.size} images to chapter $chapterNumber")
 
             } catch (e: Exception) {
-                android.util.Log.e("HomeViewModel", "âŒ Error adding manga", e)
+                android.util.Log.e("HomeViewModel", "❌ Error adding chapter", e)
+            }
+        }
+    }
+
+    /**
+     * ✅ NEW: Thêm chapter mới với PDF vào manga có sẵn
+     */
+    fun addChapterWithPdf(mangaId: Long, chapterNumber: Int, pdfUri: String) {
+        viewModelScope.launch(Dispatchers.IO) {
+            try {
+                val totalPages = getPdfPageCount(pdfUri)
+
+                if (totalPages <= 0) {
+                    android.util.Log.w("HomeViewModel", "PDF has no pages")
+                    return@launch
+                }
+
+                // Tạo chapter mới
+                val chapter = ChapterEntity(
+                    mangaId = mangaId,
+                    number = chapterNumber,
+                    title = "Chapter $chapterNumber"
+                )
+                val chapterId = chapterDao.insert(chapter)
+
+                // Thêm PDF pages
+                for (pdfPageIndex in 0 until totalPages) {
+                    val pageEntity = PageEntity(
+                        chapterId = chapterId,
+                        pageIndex = pdfPageIndex,
+                        pdfUri = pdfUri,
+                        pdfPageNumber = pdfPageIndex,
+                        pageType = "PDF"
+                    )
+                    pageDao.insert(pageEntity)
+                }
+
+                android.util.Log.d("HomeViewModel", "✅ Added PDF with $totalPages pages to chapter $chapterNumber")
+
+            } catch (e: Exception) {
+                android.util.Log.e("HomeViewModel", "Error adding PDF chapter", e)
+            }
+        }
+    }
+
+    /**
+     * ✅ NEW: Thêm ảnh trực tiếp vào manga (không tạo chapter)
+     * Chapter chỉ là internal structure, user không thấy
+     */
+    fun addMangaWithImages(manga: MangaEntity, imageUris: List<String>) {
+        viewModelScope.launch(Dispatchers.IO) {
+            try {
+                // 1. Tạo manga
+                val mangaId = mangaDao.insert(manga)
+                android.util.Log.d("HomeViewModel", "Created manga: $mangaId")
+
+                // 2. Tạo chapter ẩn (internal only)
+                val chapter = ChapterEntity(
+                    mangaId = mangaId,
+                    number = 1,
+                    title = null // No title needed
+                )
+                val chapterId = chapterDao.insert(chapter)
+
+                // 3. Thêm pages
+                imageUris.forEachIndexed { index, uri ->
+                    val page = PageEntity(
+                        chapterId = chapterId,
+                        pageIndex = index,
+                        imageUri = uri,
+                        pageType = "IMAGE"
+                    )
+                    pageDao.insert(page)
+                }
+
+                android.util.Log.d("HomeViewModel", "Added ${imageUris.size} images")
+
+                // ✅ Return manga ID
+                _mangaCreated.postValue(mangaId)
+
+            } catch (e: Exception) {
+                android.util.Log.e("HomeViewModel", "❌ Error adding manga", e)
             }
         }
     }
@@ -160,11 +242,10 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
                 getApplication<Application>().contentResolver.openFileDescriptor(uri, "r")?.use { pfd ->
                     android.graphics.pdf.PdfRenderer(pfd).use { renderer ->
                         pageCount = renderer.pageCount
-                        android.util.Log.d("HomeViewModel", "PDF has $pageCount pages")
                     }
                 }
             } catch (e: Exception) {
-                android.util.Log.e("HomeViewModel", "Error reading PDF page count", e)
+                android.util.Log.e("HomeViewModel", "Error reading PDF", e)
                 pageCount = 1
             }
 
@@ -173,35 +254,30 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     /**
-     * âœ… FIX: PDF cÅ©ng vÃ o 1 CHAPTER DUY NHáº¤T
-     * KhÃ´ng auto-split chapters ná»¯a
+     * ✅ NEW: PDF cũng không có chapter concept
      */
     fun addMangaFromPdf(manga: MangaEntity, pdfUri: String) {
         viewModelScope.launch(Dispatchers.IO) {
             try {
-                android.util.Log.d("HomeViewModel", "Starting PDF import: $pdfUri")
-
                 val totalPages = getPdfPageCount(pdfUri)
 
                 if (totalPages <= 0) {
-                    android.util.Log.w("HomeViewModel", "PDF has no readable pages")
+                    android.util.Log.w("HomeViewModel", "PDF has no pages")
                     return@launch
                 }
 
-                // 1. Táº¡o manga
+                // 1. Tạo manga
                 val mangaId = mangaDao.insert(manga)
-                android.util.Log.d("HomeViewModel", "âœ… Created manga: $mangaId")
 
-                // 2. Táº¡o 1 CHAPTER DUY NHáº¤T
+                // 2. Tạo chapter ẩn
                 val chapter = ChapterEntity(
                     mangaId = mangaId,
                     number = 1,
-                    title = "Chapter 1"
+                    title = null
                 )
                 val chapterId = chapterDao.insert(chapter)
-                android.util.Log.d("HomeViewModel", "âœ… Created single chapter: $chapterId")
 
-                // 3. ThÃªm Táº¤T Cáº¢ PDF pages vÃ o chapter nÃ y
+                // 3. Thêm PDF pages
                 for (pdfPageIndex in 0 until totalPages) {
                     val pageEntity = PageEntity(
                         chapterId = chapterId,
@@ -213,10 +289,13 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
                     pageDao.insert(pageEntity)
                 }
 
-                android.util.Log.d("HomeViewModel", "âœ… Added all $totalPages PDF pages to chapter 1")
+                android.util.Log.d("HomeViewModel", "✅ Added PDF with $totalPages pages")
+
+                // ✅ Return manga ID
+                _mangaCreated.postValue(mangaId)
 
             } catch (e: Exception) {
-                android.util.Log.e("HomeViewModel", "Error processing PDF: ${e.message}", e)
+                android.util.Log.e("HomeViewModel", "Error processing PDF", e)
             }
         }
     }
